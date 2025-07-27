@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/di/dependency_injection.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/pages/home/home_page.dart';
-import 'presentation/bloc/habits/habits_bloc.dart';
-import 'presentation/bloc/habit_calendar/habit_calendar_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,15 +18,7 @@ class HabitoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<HabitsBloc>(
-          create: (context) => getIt<HabitsBloc>(),
-        ),
-        BlocProvider<HabitCalendarBloc>(
-          create: (context) => getIt<HabitCalendarBloc>(),
-        ),
-      ],
+    return ProviderScope(
       child: MaterialApp(
         title: 'Habito',
         debugShowCheckedModeBanner: false,

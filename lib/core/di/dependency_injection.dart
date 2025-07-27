@@ -10,8 +10,6 @@ import '../../domain/usecases/habit_entry_usecases.dart';
 import '../../domain/entities/habit.dart';
 import '../../domain/entities/habit_entry.dart';
 import '../services/habit_tracking_service.dart';
-import '../../presentation/bloc/habits/habits_bloc.dart';
-import '../../presentation/bloc/habit_calendar/habit_calendar_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -50,22 +48,6 @@ Future<void> setupDependencies() async {
   // Services
   getIt.registerLazySingleton(() => HabitTrackingService(
         getAllHabitsUseCase: getIt(),
-        markMissedHabitsUseCase: getIt(),
-      ));
-
-  // Blocs
-  getIt.registerFactory(() => HabitsBloc(
-        createHabitUseCase: getIt(),
-        getAllHabitsUseCase: getIt(),
-        updateHabitUseCase: getIt(),
-        deleteHabitUseCase: getIt(),
-        watchHabitsUseCase: getIt(),
-      ));
-
-  getIt.registerFactory(() => HabitCalendarBloc(
-        toggleHabitUseCase: getIt(),
-        getHabitEntriesForMonthUseCase: getIt(),
-        getHabitEntryUseCase: getIt(),
         markMissedHabitsUseCase: getIt(),
       ));
 }
