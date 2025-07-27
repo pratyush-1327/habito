@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/habits_provider.dart';
 import '../../providers/habit_calendar_provider.dart';
+import '../../../domain/entities/habit_entry.dart';
 import '../add_habit_page.dart';
 
 class CalendarPage extends ConsumerStatefulWidget {
@@ -25,11 +26,13 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   void _loadCalendarData() {
     final habitsAsync = ref.read(habitsProvider);
     habitsAsync.whenData((habits) {
-      ref.read(habitCalendarProvider.notifier).loadHabitCalendar(
-            _currentMonth.year,
-            _currentMonth.month,
-            habits,
-          );
+      if (habits.isNotEmpty) {
+        ref.read(habitCalendarProvider.notifier).loadHabitCalendar(
+              _currentMonth.year,
+              _currentMonth.month,
+              habits,
+            );
+      }
     });
   }
 
@@ -106,6 +109,9 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                 if (habits.isEmpty) {
                   return _buildEmptyState();
                 }
+
+                // Watch the calendar state to trigger rebuilds when habits are toggled
+                ref.watch(habitCalendarProvider);
 
                 return _buildCalendar(habits);
               },
@@ -271,7 +277,10 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             .read(habitCalendarProvider.notifier)
             .getHabitEntry(habit.id, day);
 
-        if (entry != null && entry.status.toString().contains('completed')) {
+        // Debug: Print the entry status
+        print('🎨 UI: Habit ${habit.name} on day $day: ${entry?.status}');
+
+        if (entry != null && entry.status == HabitStatus.completed) {
           color = Colors.green;
         } else if (_isPastDate(
             DateTime(_currentMonth.year, _currentMonth.month, day))) {
@@ -376,8 +385,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                 final entry = ref
                     .read(habitCalendarProvider.notifier)
                     .getHabitEntry(habit.id, date.day);
-                isCompleted =
-                    entry?.status.toString().contains('completed') ?? false;
+                isCompleted = entry?.status == HabitStatus.completed;
+
+                // Debug: Print the dialog entry status
+                // print(
+                //     'Dialog - Habit ${habit.name} on day ${date.day}: ${entry?.status}, isCompleted: $isCompleted');
               }
 
               return ListTile(
@@ -396,10 +408,37 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                         ? Colors.green
                         : Theme.of(context).colorScheme.outline,
                   ),
-                  onPressed: () {
-                    ref
-                        .read(habitCalendarProvider.notifier)
-                        .toggleHabitForDate(habit.id, date);
+                  onPressed: () async {
+                    try {
+                      // Toggle the habit and wait for completion
+                      await ref
+                          .read(habitCalendarProvider.notifier)
+                          .toggleHabitForDate(habit.id, date);
+
+                      // Close the dialog to show immediate feedback
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+
+                        // Show success feedback
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Habit updated successfully!'),
+                            duration: Duration(milliseconds: 1000),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      // Show error if something goes wrong
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error updating habit: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
               );

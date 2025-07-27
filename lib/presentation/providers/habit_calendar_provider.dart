@@ -119,11 +119,22 @@ class HabitCalendarNotifier extends StateNotifier<HabitCalendarState> {
 
   Future<void> toggleHabitForDate(String habitId, DateTime date) async {
     try {
+      print('🎯 Provider: toggleHabitForDate called for $habitId on $date');
+
       await _toggleHabitUseCase(habitId, date);
+
+      print('🔄 Provider: Use case completed, reloading calendar...');
 
       // Reload calendar with current state
       await loadHabitCalendar(state.year, state.month, state.habits);
+
+      print('✅ Provider: Calendar reloaded successfully');
+
+      // Verify the entry is in our state
+      final entry = getHabitEntry(habitId, date.day);
+      print('📊 Provider: Entry in state after reload: ${entry?.status}');
     } catch (error) {
+      print('❌ Provider: Error in toggleHabitForDate: $error');
       state = state.copyWith(error: error.toString());
     }
   }

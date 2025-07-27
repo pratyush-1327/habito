@@ -39,13 +39,28 @@ class HabitEntryRepositoryImpl implements HabitEntryRepository {
   @override
   Future<HabitEntry?> getHabitEntry(String habitId, DateTime date) async {
     final box = await _habitEntryBox;
+    print(
+        '🔍 Repository: Looking for entry - habitId: $habitId, date: ${date.day}/${date.month}/${date.year}');
+    print('📦 Repository: Total entries in box: ${box.values.length}');
+
     try {
-      return box.values.firstWhere((entry) =>
-          entry.habitId == habitId &&
-          entry.date.day == date.day &&
-          entry.date.month == date.month &&
-          entry.date.year == date.year);
+      final entry = box.values.firstWhere((entry) {
+        final matches = entry.habitId == habitId &&
+            entry.date.day == date.day &&
+            entry.date.month == date.month &&
+            entry.date.year == date.year;
+
+        if (matches) {
+          print(
+              '✅ Repository: Found matching entry with status: ${entry.status}');
+        }
+
+        return matches;
+      });
+
+      return entry;
     } catch (e) {
+      print('❌ Repository: No matching entry found');
       return null;
     }
   }

@@ -7,7 +7,11 @@ class ToggleHabitUseCase {
   ToggleHabitUseCase(this.repository);
 
   Future<void> call(String habitId, DateTime date) async {
+    print('🔄 ToggleHabitUseCase: Starting for habitId: $habitId, date: $date');
+
     final existingEntry = await repository.getHabitEntry(habitId, date);
+    print(
+        '📊 ToggleHabitUseCase: Existing entry status: ${existingEntry?.status}');
 
     if (existingEntry != null) {
       // If entry exists, toggle between completed and missed
@@ -15,14 +19,26 @@ class ToggleHabitUseCase {
           ? HabitStatus.missed
           : HabitStatus.completed;
 
+      print(
+          '🔄 ToggleHabitUseCase: Changing status from ${existingEntry.status} to $newStatus');
+
       final updatedEntry = existingEntry.copyWith(
         status: newStatus,
         updatedAt: DateTime.now(),
       );
 
+      print(
+          '💾 ToggleHabitUseCase: Saving updated entry with status: ${updatedEntry.status}');
       await repository.updateHabitEntry(updatedEntry);
+
+      // Verify the entry was saved
+      final verifyEntry = await repository.getHabitEntry(habitId, date);
+      print(
+          '✅ ToggleHabitUseCase: Verification - saved entry status: ${verifyEntry?.status}');
     } else {
       // Create new entry as completed
+      print('➕ ToggleHabitUseCase: Creating new entry as completed');
+
       final newEntry = HabitEntry(
         id: '${habitId}_${date.millisecondsSinceEpoch}',
         habitId: habitId,
@@ -31,7 +47,14 @@ class ToggleHabitUseCase {
         createdAt: DateTime.now(),
       );
 
+      print(
+          '💾 ToggleHabitUseCase: Saving new entry with status: ${newEntry.status}');
       await repository.addHabitEntry(newEntry);
+
+      // Verify the entry was saved
+      final verifyEntry = await repository.getHabitEntry(habitId, date);
+      print(
+          '✅ ToggleHabitUseCase: Verification - new entry status: ${verifyEntry?.status}');
     }
   }
 }
