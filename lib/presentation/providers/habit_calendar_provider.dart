@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/habit.dart';
 import '../../domain/entities/habit_entry.dart';
 import '../../domain/usecases/habit_entry_usecases.dart';
+import '../../domain/usecases/habit_usecases.dart';
 import '../../core/di/dependency_injection.dart';
 
 // Providers for habit entry use cases
@@ -85,22 +86,42 @@ class HabitCalendarNotifier extends StateNotifier<HabitCalendarState> {
   Future<void> loadHabitCalendar(
       int year, int month, List<Habit> habits) async {
     try {
+      print(
+          '📅 LoadCalendar: Starting for $year/$month with ${habits.length} habits');
       state = state.copyWith(isLoading: true, error: null);
 
       final entries = await _getHabitEntriesForMonthUseCase(year, month);
+      print(
+          '📊 LoadCalendar: Retrieved ${entries.length} entries from database');
 
       // Group entries by habit ID and day (matching BLoC structure)
       final Map<String, Map<int, HabitEntry>> habitEntries = {};
 
       for (final habit in habits) {
         habitEntries[habit.id] = {};
+        print(
+            '🏗️ LoadCalendar: Initialized habit ${habit.id} (${habit.name})');
       }
 
       for (final entry in entries) {
+        print(
+            '🔗 LoadCalendar: Processing entry - habitId: ${entry.habitId}, day: ${entry.date.day}, status: ${entry.status}');
         if (habitEntries[entry.habitId] != null) {
           habitEntries[entry.habitId]![entry.date.day] = entry;
+          print('✅ LoadCalendar: Added entry to state');
+        } else {
+          print(
+              '❌ LoadCalendar: Habit ${entry.habitId} not found in habits list');
         }
       }
+
+      print('📊 LoadCalendar: Final habitEntries structure:');
+      habitEntries.forEach((habitId, dayEntries) {
+        print('  Habit $habitId: ${dayEntries.length} entries');
+        dayEntries.forEach((day, entry) {
+          print('    Day $day: ${entry.status}');
+        });
+      });
 
       state = HabitCalendarState(
         year: year,
@@ -109,7 +130,10 @@ class HabitCalendarNotifier extends StateNotifier<HabitCalendarState> {
         habits: habits,
         isLoading: false,
       );
+
+      print('✅ LoadCalendar: State updated successfully');
     } catch (error) {
+      print('❌ LoadCalendar: Error - $error');
       state = state.copyWith(
         isLoading: false,
         error: error.toString(),
@@ -125,14 +149,29 @@ class HabitCalendarNotifier extends StateNotifier<HabitCalendarState> {
 
       print('🔄 Provider: Use case completed, reloading calendar...');
 
-      // Reload calendar with current state
-      await loadHabitCalendar(state.year, state.month, state.habits);
+      // Get the latest habits from the habits provider instead of using stale state
+      // We need to get this from dependency injection since we can't access ref here
+      final getAllHabitsUseCase = getIt<GetAllHabitsUseCase>();
+      final currentHabits = await getAllHabitsUseCase();
+
+      print('🔄 Provider: Got ${currentHabits.length} habits for reload');
+
+      // Reload calendar with current state and fresh habits
+      await loadHabitCalendar(state.year, state.month, currentHabits);
 
       print('✅ Provider: Calendar reloaded successfully');
 
       // Verify the entry is in our state
       final entry = getHabitEntry(habitId, date.day);
-      print('📊 Provider: Entry in state after reload: ${entry?.status}');
+      print(
+          '📊 Provider: Entry in state after reload for habit $habitId on day ${date.day}: ${entry?.status}');
+
+      // Also check if the habit exists in our state
+      print('🔍 Provider: Checking if habit $habitId exists in state...');
+      print(
+          '📋 Provider: Available habits in state: ${state.habits.map((h) => '${h.id}(${h.name})').join(', ')}');
+      print(
+          '📦 Provider: habitEntries keys: ${state.habitEntries.keys.join(', ')}');
     } catch (error) {
       print('❌ Provider: Error in toggleHabitForDate: $error');
       state = state.copyWith(error: error.toString());

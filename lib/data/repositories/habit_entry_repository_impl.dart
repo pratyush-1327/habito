@@ -31,9 +31,21 @@ class HabitEntryRepositoryImpl implements HabitEntryRepository {
   @override
   Future<List<HabitEntry>> getHabitEntriesForMonth(int year, int month) async {
     final box = await _habitEntryBox;
-    return box.values
-        .where((entry) => entry.date.year == year && entry.date.month == month)
-        .toList();
+    print('📅 Repository: getHabitEntriesForMonth for $year/$month');
+    print('📦 Repository: Total entries in box: ${box.values.length}');
+
+    final filteredEntries = box.values.where((entry) {
+      final matches = entry.date.year == year && entry.date.month == month;
+      if (matches) {
+        print(
+            '✅ Repository: Found entry for ${entry.habitId} on ${entry.date.day}/${entry.date.month}/${entry.date.year} - ${entry.status}');
+      }
+      return matches;
+    }).toList();
+
+    print(
+        '📊 Repository: Returning ${filteredEntries.length} entries for $year/$month');
+    return filteredEntries;
   }
 
   @override

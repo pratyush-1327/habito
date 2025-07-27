@@ -65,7 +65,14 @@ class GetHabitEntriesForMonthUseCase {
   GetHabitEntriesForMonthUseCase(this.repository);
 
   Future<List<HabitEntry>> call(int year, int month) async {
-    return await repository.getHabitEntriesForMonth(year, month);
+    print('📅 GetHabitEntriesForMonth: Fetching entries for $year/$month');
+    final entries = await repository.getHabitEntriesForMonth(year, month);
+    print('📊 GetHabitEntriesForMonth: Found ${entries.length} entries');
+    for (final entry in entries) {
+      print(
+          '  📝 Entry: ${entry.habitId} on ${entry.date.day}/${entry.date.month} - ${entry.status}');
+    }
+    return entries;
   }
 }
 
