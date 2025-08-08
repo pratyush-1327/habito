@@ -14,18 +14,17 @@ class CalendarPage extends ConsumerStatefulWidget {
 
 class _CalendarPageState extends ConsumerState<CalendarPage> {
   DateTime _currentMonth = DateTime.now();
+  final Set<String> _selectedHabitFilters = {};
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCalendarData();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attemptInitialLoad());
   }
 
-  void _loadCalendarData() {
-    final habitsAsync = ref.read(habitsProvider);
-    habitsAsync.whenData((habits) {
+  void _attemptInitialLoad() {
+    final habitsValue = ref.read(habitsProvider);
+    habitsValue.whenData((habits) {
       if (habits.isNotEmpty) {
         ref.read(habitCalendarProvider.notifier).loadHabitCalendar(
               _currentMonth.year,
@@ -39,6 +38,17 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   @override
   Widget build(BuildContext context) {
     final habitsAsync = ref.watch(habitsProvider);
+    final calendarState = ref.watch(habitCalendarProvider);
+
+    // Reactively reload when habits list changes length (new habit added / first load)
+    habitsAsync.whenData((habits) {
+      if (calendarState.habits.isEmpty && habits.isNotEmpty) {
+        // first population
+        ref
+            .read(habitCalendarProvider.notifier)
+            .loadHabitCalendar(_currentMonth.year, _currentMonth.month, habits);
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -50,7 +60,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               setState(() {
                 _currentMonth = DateTime.now();
               });
-              _loadCalendarData();
+              _attemptInitialLoad();
             },
           ),
           IconButton(
@@ -81,7 +91,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       _currentMonth =
                           DateTime(_currentMonth.year, _currentMonth.month - 1);
                     });
-                    _loadCalendarData();
+                    _attemptInitialLoad();
                   },
                 ),
                 Text(
@@ -95,7 +105,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       _currentMonth =
                           DateTime(_currentMonth.year, _currentMonth.month + 1);
                     });
-                    _loadCalendarData();
+                    _attemptInitialLoad();
                   },
                 ),
               ],
@@ -106,49 +116,91 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
           Expanded(
             child: habitsAsync.when(
               data: (habits) {
-                if (habits.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                // Watch the calendar state to trigger rebuilds when habits are toggled
-                ref.watch(habitCalendarProvider);
-
-                return _buildCalendar(habits);
+                if (habits.isEmpty) return _buildEmptyState();
+                final filtered = _selectedHabitFilters.isEmpty
+                    ? habits
+                    : habits
+                        .where((h) => _selectedHabitFilters.contains(h.id))
+                        .toList();
+                return Column(
+                  children: [
+                    _buildHabitFilterChips(habits),
+                    Expanded(
+                        child: _buildCalendar(
+                            filtered.isEmpty ? habits : filtered)),
+                  ],
+                );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error loading habits',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      error.toString(),
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () {
-                        ref.read(habitsProvider.notifier).loadHabits();
-                      },
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
+              error: (error, _) => _buildError(error),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHabitFilterChips(List habits) {
+    return SizedBox(
+      height: 60,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: [
+          FilterChip(
+            label: const Text('All'),
+            selected: _selectedHabitFilters.isEmpty,
+            onSelected: (_) {
+              setState(() => _selectedHabitFilters.clear());
+            },
+          ),
+          const SizedBox(width: 8),
+          ...habits.map((h) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  avatar: CircleAvatar(
+                    backgroundColor: Color(int.parse(h.color)),
+                    child: Text(h.icon, style: const TextStyle(fontSize: 14)),
+                  ),
+                  label: Text(h.name),
+                  selected: _selectedHabitFilters.contains(h.id),
+                  onSelected: (sel) {
+                    setState(() {
+                      if (sel) {
+                        _selectedHabitFilters.add(h.id);
+                      } else {
+                        _selectedHabitFilters.remove(h.id);
+                      }
+                    });
+                  },
+                ),
+              ))
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError(Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline,
+                size: 72, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+            Text('Error loading habits',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(error.toString(), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => ref.read(habitsProvider.notifier).loadHabits(),
+              child: const Text('Retry'),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -270,21 +322,29 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     for (final habit in habits.take(3)) {
       // Show max 3 habits per day
       Color color =
-          Theme.of(context).colorScheme.outline.withValues(alpha: 0.3);
+          Theme.of(context).colorScheme.outlineVariant.withOpacity(0.25);
 
       if (!calendarState.isLoading && calendarState.error == null) {
         final entry = ref
             .read(habitCalendarProvider.notifier)
             .getHabitEntry(habit.id, day);
-
-        // Debug: Print the entry status
-        print('🎨 UI: Habit ${habit.name} on day $day: ${entry?.status}');
-
-        if (entry != null && entry.status == HabitStatus.completed) {
-          color = Colors.green;
+        if (entry != null) {
+          switch (entry.status) {
+            case HabitStatus.completed:
+              color = Colors.green;
+              break;
+            case HabitStatus.missed:
+              color = Colors.red.withOpacity(0.7);
+              break;
+            case HabitStatus.pending:
+              color = Theme.of(context).colorScheme.tertiary;
+              break;
+          }
         } else if (_isPastDate(
             DateTime(_currentMonth.year, _currentMonth.month, day))) {
-          color = Colors.red.withValues(alpha: 0.7);
+          // Past days with no entry: keep subtle neutral (no aggressive red at load)
+          color =
+              Theme.of(context).colorScheme.outlineVariant.withOpacity(0.15);
         }
       }
 
@@ -367,91 +427,70 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   }
 
   void _onDayTapped(DateTime date, List habits) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${date.day}/${date.month}/${date.year}'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: habits.length,
-            itemBuilder: (context, index) {
-              final habit = habits[index];
-              final calendarState = ref.watch(habitCalendarProvider);
-
-              bool isCompleted = false;
-              if (!calendarState.isLoading && calendarState.error == null) {
-                final entry = ref
-                    .read(habitCalendarProvider.notifier)
-                    .getHabitEntry(habit.id, date.day);
-                isCompleted = entry?.status == HabitStatus.completed;
-
-                // Debug: Print the dialog entry status
-                // print(
-                //     'Dialog - Habit ${habit.name} on day ${date.day}: ${entry?.status}, isCompleted: $isCompleted');
-              }
-
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Color(int.parse(habit.color)),
-                  child: Text(
-                    habit.icon,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                title: Text(habit.name),
-                trailing: IconButton(
-                  icon: Icon(
-                    isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                    color: isCompleted
-                        ? Colors.green
-                        : Theme.of(context).colorScheme.outline,
-                  ),
-                  onPressed: () async {
-                    try {
-                      // Toggle the habit and wait for completion
-                      await ref
-                          .read(habitCalendarProvider.notifier)
-                          .toggleHabitForDate(habit.id, date);
-
-                      // Close the dialog to show immediate feedback
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-
-                        // Show success feedback
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Habit updated successfully!'),
-                            duration: Duration(milliseconds: 1000),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      // Show error if something goes wrong
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error updating habit: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
+      builder: (context) {
+        final calendarState = ref.watch(habitCalendarProvider);
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            left: 16,
+            right: 16,
+            top: 8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_monthName(date.month)} ${date.day}, ${date.year}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              ...habits.map((habit) {
+                final entry = calendarState.habitEntries[habit.id]?[date.day];
+                final status = entry?.status;
+                final completed = status == HabitStatus.completed;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Color(int.parse(habit.color)),
+                      child: Text(habit.icon,
+                          style: const TextStyle(color: Colors.white)),
+                    ),
+                    title: Text(habit.name),
+                    subtitle: status != null
+                        ? Text(status.name)
+                        : const Text('Not tracked'),
+                    trailing: IconButton(
+                      icon: Icon(
+                        completed
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: completed
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.outline,
+                      ),
+                      onPressed: () async {
+                        await ref
+                            .read(habitCalendarProvider.notifier)
+                            .toggleHabitForDate(habit.id, date);
+                      },
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
     );
   }
 
